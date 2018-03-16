@@ -1,0 +1,159 @@
+---
+title: "Week 4"
+output: html_notebook
+---
+
+```{r setup}
+library(e1071)
+library(readxl)
+week4 <- read_excel("week4.xlsx")
+
+drawChart=function(val, myStr){
+  #Hist=hist(val, breaks="Scott", main=myStr)
+  myHist=hist(val, breaks="Sturges", main=myStr)
+  par(new=TRUE)
+  curve(
+    dnorm(x, mean(val), sd(val)),
+    xlim=c(min(myHist$breaks), max(myHist$breaks)),
+    xlab="", ylab="",
+    xaxt="n", yaxt="n",
+    bty="n"
+  )
+
+  boxplot(val, horizontal=T)
+  par(new=T)
+  stripchart(val, method="stack")
+}
+
+mySDsummary=function(x) {
+  df = data.frame(
+    "Mean"=mean(x),
+    "Median"=median(x),
+    "Mode"=names(which.max(table(x))),
+    "Standard deviation"=sd(x),
+    "Standard error"=sd(x)/sqrt(length(x)),
+    "Variance"=var(x),
+    "Kurtosis"=kurtosis(x),
+    "Skewness"=skewness(x),
+    "Min"=min(x),
+    "Max"=max(x),
+    "Total"=sum(x),
+    "Length"=length(x)
+  )
+  
+  return(df)
+}
+
+getSDinterval = function(val){
+    return(c(
+    val$Mean-1.96*val$Standard.deviation/sqrt(val$Length),
+    val$Mean+1.96*val$Standard.deviation/sqrt(val$Length)
+  ))
+}
+
+getTinterval=function(x){
+  ret = t.test(x)
+  print(ret)
+  
+  return (c(ret$conf.int[1], ret$conf.int[2]))
+}
+
+seekPrice=function(x){
+  fte=15
+  material=500
+  logistic=100
+  others=300
+  
+  return(x * fte + material + logistic + others)
+}
+
+myHour = week4$`ASM hours (Min)`
+```
+
+# 1. Get Interval (Low and High value) at 95% confidence level for mean ASM hours 
+## Standard deviation case
+```{r}
+drawChart(myHour, "ASM hours")
+df = mySDsummary(myHour)
+print(df)
+```
+
+Minmum-Maximum ASM min rage in 95% confident interval is
+```{r}
+print(getSDinterval(df))
+```
+
+## T test case
+Minimum-Maximum ASM min range in 95% confident interval is
+```{r}
+print(getTinterval(myHour))
+```
+
+# 2. Estimate the unit price of this toy for sales planning 
+## Assumption
+```{r}
+topFTE1 = 18
+midFTE1 = 20
+wstFTE1 = 22
+```
+Standard deviation case and T test case output almost same FTE.  
+Set FTE/product as following.
+
+* `r topFTE1`: high performance
+* `r midFTE1`: average performance
+* `r wstFTE1`: low perfomance
+
+* total = `r seekPrice(0)`/unit
+  + Material cost = 500
+  + Logistic cost = 100
+  + Other costs = 300
+
+```{r}
+mat = matrix(c(
+  seekPrice(topFTE1),
+  seekPrice(midFTE1),
+  seekPrice(wstFTE1)
+), ncol=3)
+
+colnames(mat)=c(
+  "high perf",
+  "avr perf",
+  "low perf"
+)
+
+mat = rbind(mat, c(
+  mat[1,1] / (1 - 0.3),
+  mat[1,2] / (1 - 0.3),
+  mat[1,3] / (1 - 0.3)
+))
+
+x = 10000
+y = 0.95
+z = 1 - y
+
+
+mat = rbind(mat, c(
+  x * z * mat[1,1] / x * y,
+  x * z * mat[1,2] / x * y,
+  x * z * mat[1,3] / x * y  
+))
+
+rownames(mat) = c(
+  "break even cost/unit",
+  "including 30 allowance",
+  "offset cost for 5%"
+)
+```
+## Direction
+total X units production.  
+95% for sale, 5% are for rejected, returned exchange, etc.  
+Ex: total 3600 units, 95% (3420 units) for sale, 5% (180 units) are not.  
+Add following cost To offset for 5%.
+offset = 5 % * breake even cost per unit / 95%
+
+## Pricing
+`r data.frame(mat)`
+30% allowance = 30% profit ratio  
+* estimation: 1780 
+
+
